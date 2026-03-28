@@ -1,0 +1,64 @@
+{
+  "deterministic_rules": [
+    {
+      "tool": "get_manager_leave_dashboard",
+      "roles": ["manager"],
+      "keywords": ["dashboard", "manager dashboard", "team dashboard"],
+      "args": {}
+    },
+    {
+      "tool": "get_team_leave_summary",
+      "roles": ["manager"],
+      "keywords": ["team", "all employees", "summary", "overall"],
+      "args": {}
+    },
+    {
+      "tool": "list_employees",
+      "roles": ["manager"],
+      "keywords": ["employee directory", "list employees", "directory"],
+      "args": {}
+    },
+    {
+      "tool": "get_role_breakdown",
+      "roles": ["manager"],
+      "keywords": ["role breakdown", "employee roles", "roles summary"],
+      "args": {}
+    },
+    {
+      "tool": "get_leave_leaderboard",
+      "roles": ["manager"],
+      "keywords": ["leaderboard", "top leave", "most leave"],
+      "args": {}
+    },
+    {
+      "tool": "get_low_leave_alerts",
+      "roles": ["manager"],
+      "keywords": ["low leave", "alerts", "at risk"],
+      "args": {}
+    },
+    {
+      "tool": "get_employee_leave_details",
+      "roles": ["employee", "manager"],
+      "keywords": ["my details", "profile", "employee details"],
+      "args": {
+        "employee_id": "$employee_id"
+      }
+    },
+    {
+      "tool": "get_leave_balance",
+      "roles": ["employee", "manager"],
+      "keywords": ["leave", "vacation", "pto", "days off", "time off", "leave left", "vacation left"],
+      "args": {
+        "employee_id": "$employee_id"
+      }
+    }
+  ],
+  "fallback": {
+    "message": "Sorry, I couldn't process that.",
+    "tool": "get_leave_balance",
+    "keywords": ["leave", "vacation", "pto", "days off", "time off", "leave left", "vacation left"],
+    "args": {
+      "employee_id": "$employee_id"
+    }
+  }
+}

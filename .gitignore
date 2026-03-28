@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment files and secrets
+.env
+backend/.env
+
+# Logs and runtime outputs
+*.log
+api_*_out.log
+api_*_err.log
+backend_*_out.log
+backend_*_err.log
+mcp_*_out.log
+mcp_*_err.log
+uvicorn_*_out.log
+uvicorn_*_err.log
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
