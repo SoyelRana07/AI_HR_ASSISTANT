@@ -1,130 +1,161 @@
-AI HR Assistant
-An AI-powered HR assistant built with FastAPI and Streamlit, using LLM-based tool routing and MCP execution for leave management workflows.
+# AI HR Assistant
 
-Overview
-This project lets employees and managers ask HR leave questions in natural language.
-The system routes each request to the right backend tool through an LLM router and executes it via an MCP layer.
+AI-powered HR assistant built with FastAPI and Streamlit, using LLM-based tool routing and MCP execution for leave workflows.
 
-Key Features
-Natural language HR queries
-Role-based authentication (employee and manager)
-Employee data access guardrails
-LLM tool selection with MCP tool execution
-Manager analytics:
-Team leave summary
-Leave dashboard
-Low leave alerts
-Leaderboard
-Routing debug visibility in UI
-Architecture
-Frontend: Streamlit
-API Backend: FastAPI
-Data Layer: SQLAlchemy + PostgreSQL
-LLM Router: Chooses tool from available tool metadata
-MCP Server: Exposes tools and executes selected actions
+## Overview
+
+This project lets employees and managers ask HR leave questions in natural language. The system routes each request to the right backend tool through an LLM router and executes it via an MCP layer.
+
+## Key Features
+
+- Natural language HR queries
+- Role-based authentication for employee and manager personas
+- Employee data access guardrails
+- LLM tool selection with MCP tool execution
+- Manager analytics:
+	- Team leave summary
+	- Manager dashboard
+	- Low leave alerts
+	- Leave leaderboard
+- Routing debug visibility in UI
+
+## Architecture
+
+- Frontend: Streamlit
+- API Backend: FastAPI
+- Data Layer: SQLAlchemy + PostgreSQL
+- LLM Router: Chooses tool from available metadata
+- MCP Server: Exposes and executes tools
+
 Flow:
-User prompt -> Backend chat endpoint -> LLM router decides tool -> MCP tool execution -> Structured response to UI
 
-Tech Stack
-Python
-FastAPI
-Streamlit
-SQLAlchemy
-PostgreSQL
-Ollama (local model runtime)
-Project Structure
-backend: API, auth, DB models, repository/services
-frontend: Streamlit interface
-llm: Router and LLM engine
-mcp: MCP server, runtime, tool registry, tool implementations
-Local Setup
-1. Create and activate virtual environment
+User prompt -> Backend chat endpoint -> LLM router decides tool -> MCP executes tool -> Structured response to UI
+
+## Tech Stack
+
+- Python
+- FastAPI
+- Streamlit
+- SQLAlchemy
+- PostgreSQL
+- Ollama (local model runtime)
+
+## Project Structure
+
+- backend: API, auth, models, repository, services
+- frontend: Streamlit UI
+- llm: Router and inference client
+- mcp: Server, runtime, registry, tool definitions
+
+## Local Setup
+
+### 1. Create and activate a virtual environment
+
 Windows PowerShell:
+
+```powershell
 python -m venv .venv
-Activate.ps1
+.\.venv\Scripts\Activate.ps1
+```
 
-2. Install dependencies
+### 2. Install dependencies
+
+```powershell
 pip install -r requirements.txt
+```
 
-3. Configure environment
-Create .env (or update existing) with:
+### 3. Configure environment
 
-DATABASE_URL or DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME
-MCP_MODE
-MCP_SERVER_URL
-MCP_TIMEOUT_SECONDS
-MCP_STRICT_REMOTE
-OLLAMA_URL
-OLLAMA_MODEL
-OLLAMA_TIMEOUT_SECONDS
-BACKEND_CHAT_URL
-ROUTER_RULES_PATH
+Use backend/.env and set:
 
+- DATABASE_URL (or DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME)
+- MCP_MODE
+- MCP_SERVER_URL
+- MCP_TIMEOUT_SECONDS
+- MCP_STRICT_REMOTE
+- OLLAMA_URL
+- OLLAMA_MODEL
+- OLLAMA_TIMEOUT_SECONDS
+- BACKEND_CHAT_URL
+- ROUTER_RULES_PATH
 
-4. Seed database
-python seed_dummy_data.py
+### 4. Seed database
 
-5. Start services
+```powershell
+python backend/seed_dummy_data.py
+```
+
+### 5. Start services
+
 Terminal 1:
+
+```powershell
 python -m uvicorn mcp.server:app --host 127.0.0.1 --port 8003
+```
 
 Terminal 2:
+
+```powershell
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
 Terminal 3:
+
+```powershell
 cd frontend
 streamlit run app.py
+```
 
-Login Credentials (Demo Seed Data)
-Manager:
+## Demo Credentials
 
-Employee ID: 2
+- Manager: Employee ID 2, Password 0002
+- Employee: Employee ID 1, Password 0001
 
-Password: 0002
+Local dev password rule: zero-padded employee ID unless shared password is configured.
 
-Employee example:
+## Example Prompts
 
-Employee ID: 1
-
-Password: 0001
-
-Password rule in local dev:
-Zero-padded employee ID unless shared password is configured.
-
-Example Prompts
 Employee:
 
-Show my leave balance
-Show my details
+- show my leave balance
+- show my details
+
 Manager:
 
-Show team leave summary
-Show manager dashboard
-Show low leave alerts
-Show leave leaderboard
-Show leave balance for employee 4
-Security and Guardrails
-Employees can only access their own leave data
-Manager-only tools are role-protected
-Tool arguments are schema-validated before execution
-Invalid tool calls return structured error responses
+- show team leave summary
+- show manager dashboard
+- show low leave alerts
+- show leave leaderboard
+- show leave balance for employee 4
 
+## Security and Guardrails
 
-Debug and Observability
-The chat response includes routing debug metadata, such as:
-selected_tool
-selected_args
-repair_attempted
-current/requested employee context
-Useful for verifying LLM routing behavior during development.
+- Employees can only access their own leave data
+- Manager-only tools are role-protected
+- Tool arguments are schema-validated before execution
+- Invalid tool calls return structured error payloads
 
-Current Status
-Local MVP complete
-Core manager and employee flows validated
-UI polished for portfolio/demo presentation
-Deployment intentionally deferred
-Roadmap
-Password hashing and stronger auth hardening
-Rate limiting and quota protection
-Automated tests for routing and authorization
-Optional cloud deployment
+## Debug and Observability
+
+Chat responses include routing debug metadata such as:
+
+- selected_tool
+- selected_args
+- repair_attempted
+- current/requested employee context
+
+This helps verify LLM routing behavior during development.
+
+## Current Status
+
+- Local MVP complete
+- Core manager and employee flows validated
+- UI polished for portfolio/demo presentation
+- Deployment intentionally deferred
+
+## Roadmap
+
+- Password hashing and stronger auth hardening
+- Rate limiting and quota protection
+- Automated tests for routing and authorization
+- Optional cloud deployment
