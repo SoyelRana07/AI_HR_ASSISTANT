@@ -137,8 +137,9 @@ def _strip_none_values(payload):
     return {key: value for key, value in payload.items() if value is not None}
 
 
-def _choose_tool_with_llm(user_input: str, tools, role: str):
+def _choose_tool_with_llm(user_input: str, tools, role: str, history: list = None):
     tools_for_prompt = _tools_for_prompt(tools)
+    history_str = json.dumps(history, indent=2) if history else "[]"
 
     prompt = f"""
 You are a backend JSON tool router.
@@ -165,6 +166,9 @@ AVAILABLE TOOLS:
 USER ROLE:
 {role}
 
+CHAT HISTORY (for context):
+{history_str}
+
 RULES:
 - Use ONLY tool names from AVAILABLE TOOLS.
 - NEVER invent tool names.
@@ -188,8 +192,9 @@ USER REQUEST:
     return _normalize_decision(extract_json(llm_output))
 
 
-def _repair_tool_choice_with_llm(user_input: str, tools, invalid_tool: str, role: str):
+def _repair_tool_choice_with_llm(user_input: str, tools, invalid_tool: str, role: str, history: list = None):
     tools_for_prompt = _tools_for_prompt(tools)
+    history_str = json.dumps(history, indent=2) if history else "[]"
 
     prompt = f"""
 Your previous decision was invalid.
@@ -211,6 +216,9 @@ AVAILABLE TOOLS:
 USER ROLE:
 {role}
 
+CHAT HISTORY (for context):
+{history_str}
+
 USER REQUEST:
 {user_input}
 """
@@ -227,6 +235,28 @@ USER REQUEST:
 def _fallback_message():
     return {"message": "Sorry, I couldn't process that request."}
 
+def _synthesize_response_with_llm(user_input: str, history: list, tool_result, role: str, tool_name: str):
+    history_str = json.dumps(history[-5:], indent=2) if history else "[]"
+    prompt = f"""
+You are a helpful and polite AI HR Assistant.
+Your role represents the user you are interacting with: {role}
+
+The user asked a question, and an internal system tool ({tool_name}) was used to fetch the relevant raw JSON data.
+Your task is to analyze the data and generate a natural, conversational response for the user.
+
+CHAT HISTORY CONTEXT:
+{history_str}
+
+USER REQUEST:
+{user_input}
+
+TOOL OUTPUT (Raw Data):
+{json.dumps(tool_result)}
+
+Provide ONLY the text of your final response to the user. Do not use JSON.
+"""
+    return ask_llm(prompt)
+
 
 def _with_optional_debug(result, routing_debug, include_debug: bool):
     if not include_debug:
@@ -237,7 +267,9 @@ def _with_optional_debug(result, routing_debug, include_debug: bool):
     }
 
 
-def route_query(user_input: str, employee_id: int, role: str, include_debug: bool = False):
+def route_query(user_input: str, employee_id: int, role: str, history: list = None, include_debug: bool = False):
+    if history is None:
+        history = []
     tools = get_tools_metadata()
     print("LOADED TOOLS:", tools)
 
@@ -273,7 +305,7 @@ def route_query(user_input: str, employee_id: int, role: str, include_debug: boo
 
     available_tool_names = {tool["name"] for tool in tools}
 
-    decision = _choose_tool_with_llm(user_input, tools, role)
+    decision = _choose_tool_with_llm(user_input, tools, role, history)
 
     if "message" in decision and _is_non_actionable_message(decision):
         print("NON-ACTIONABLE MESSAGE FROM LLM:", decision.get("message"))
@@ -283,6 +315,7 @@ def route_query(user_input: str, employee_id: int, role: str, include_debug: boo
             tools,
             f"placeholder message: {decision.get('message')}",
             role,
+            history
         )
 
     if "tool" in decision and decision["tool"] not in available_tool_names:
@@ -293,6 +326,7 @@ def route_query(user_input: str, employee_id: int, role: str, include_debug: boo
             tools,
             decision["tool"],
             role,
+            history
         )
 
     if "tool" in decision and decision["tool"] not in available_tool_names:
@@ -336,6 +370,11 @@ def route_query(user_input: str, employee_id: int, role: str, include_debug: boo
             {"employee_id": employee_id, "role": role},
         )
 
-        return _with_optional_debug(result, routing_debug, include_debug)
+        synthesized = _synthesize_response_with_llm(user_input, history, result, role, decision["tool"])
+
+        return _with_optional_debug(synthesized, routing_debug, include_debug)
+
+    if "message" in decision:
+        return _with_optional_debug(decision["message"], routing_debug, include_debug)
 
     return _with_optional_debug(decision, routing_debug, include_debug)

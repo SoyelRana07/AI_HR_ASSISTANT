@@ -25,6 +25,7 @@ app = FastAPI()
 
 class Query(BaseModel):
     message: str
+    history: list[dict] = []
 
 
 class LoginRequest(BaseModel):
@@ -89,6 +90,7 @@ def chat(q: Query, current_user=Depends(get_current_user)):
         q.message,
         int(current_user["employee_id"]),
         str(current_user["role"]),
+        q.history,
         include_debug=True,
     )
 

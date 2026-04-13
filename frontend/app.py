@@ -23,6 +23,8 @@ if "auth_token" not in st.session_state:
     st.session_state.auth_token = ""
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 
 def _auth_headers():
@@ -261,6 +263,19 @@ input, textarea {
     outline-offset: 1px;
 }
 
+/* Chat UI fixes */
+[data-testid="stChatMessage"] {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 0.8rem !important;
+    box-shadow: 0 6px 16px rgba(40, 33, 21, 0.08) !important;
+}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] > p {
+    color: var(--text) !important;
+    font-weight: 500;
+}
+
 /* JSON block readability */
 [data-testid="stJson"] {
     background: #18273a !important;
@@ -401,7 +416,17 @@ with left:
 
 with right:
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    st.subheader("Response")
+    st.subheader("Conversation")
+
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            if isinstance(m["content"], dict):
+                st.json(m["content"])
+            else:
+                st.markdown(m["content"])
+            if m.get("routing_debug"):
+                with st.expander("Routing Debug", expanded=False):
+                    st.json(m["routing_debug"])
 
     if send:
         if not st.session_state.auth_token:
@@ -409,53 +434,58 @@ with right:
         elif not msg.strip():
             st.warning("Enter a message before running the query.")
         else:
+            st.session_state.messages.append({"role": "user", "content": msg})
+            
+            with st.chat_message("user"):
+                st.markdown(msg)
+            
             start = time.perf_counter()
             try:
-                res = requests.post(
-                    BACKEND_CHAT_URL,
-                    json={"message": msg},
-                    headers=_auth_headers(),
-                    timeout=20,
-                )
-                res.raise_for_status()
+                history_for_api = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages[:-1]
+                    if isinstance(m["content"], str)
+                ]
+                
+                with st.spinner("Thinking..."):
+                    res = requests.post(
+                        BACKEND_CHAT_URL,
+                        json={"message": msg, "history": history_for_api},
+                        headers=_auth_headers(),
+                        timeout=30,
+                    )
+                    res.raise_for_status()
+                
                 latency_ms = int((time.perf_counter() - start) * 1000)
-                st.metric("Round-trip", f"{latency_ms} ms")
                 payload = res.json()
                 response_body = payload.get("response", payload)
                 routing_debug = payload.get("routing_debug", {})
 
+                warning_text = None
                 if isinstance(response_body, dict) and response_body.get("code") == "FORBIDDEN_EMPLOYEE_SCOPE":
-                    details = response_body.get("details", {}) if isinstance(response_body.get("details"), dict) else {}
-                    requested_id = details.get("requested_employee_id")
-                    current_id = details.get("current_employee_id")
-                    warning_text = response_body.get(
-                        "message",
-                        "Employees can only access their own leave information.",
-                    )
-                    if requested_id and current_id:
-                        warning_text = (
-                            f"{warning_text} Requested employee ID: {requested_id}. "
-                            f"Your employee ID: {current_id}."
-                        )
-                    st.warning(warning_text)
+                    details = response_body.get("details", {})
+                    warning_text = response_body.get("message", "Access denied.")
+                    if isinstance(details, dict) and "requested_employee_id" in details:
+                        warning_text += f" Requested: {details['requested_employee_id']}, Yours: {details['current_employee_id']}."
 
-                st.markdown("<div class='response-box'>", unsafe_allow_html=True)
-                st.json(response_body)
-                st.markdown("</div>", unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": response_body, "routing_debug": routing_debug})
+                
+                with st.chat_message("assistant"):
+                    if warning_text:
+                        st.warning(warning_text)
+                    if isinstance(response_body, dict):
+                        st.json(response_body)
+                    else:
+                        st.markdown(response_body)
+                    
+                    st.caption(f"Round-trip: {latency_ms} ms")
+                    if routing_debug:
+                        with st.expander("Routing Debug", expanded=False):
+                            st.json(routing_debug)
 
-                if isinstance(routing_debug, dict) and routing_debug:
-                    selected_tool = routing_debug.get("selected_tool")
-                    selected_args = routing_debug.get("selected_args")
-                    if selected_tool:
-                        st.caption(
-                            f"Tool selected: {selected_tool} | args: {selected_args if isinstance(selected_args, dict) else {}}"
-                        )
-                    with st.expander("Routing Debug", expanded=False):
-                        st.json(routing_debug)
             except requests.RequestException as exc:
                 st.error(f"Request failed: {exc}")
-    else:
-        st.info("Run a query to view formatted MCP response output.")
+                st.session_state.messages.pop()
 
     st.markdown("</div>", unsafe_allow_html=True)
 
