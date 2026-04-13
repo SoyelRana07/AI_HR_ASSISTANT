@@ -3,11 +3,11 @@ from backend.models import Base, Employee, Leave, LeaveBalance
 
 
 EMPLOYEES = [
-    {"id": 1, "name": "Aarav Sharma", "email": "aarav@company.com", "role": "employee"},
-    {"id": 2, "name": "Riya Mehta", "email": "riya@company.com", "role": "manager"},
-    {"id": 3, "name": "Karan Singh", "email": "karan@company.com", "role": "employee"},
-    {"id": 4, "name": "Neha Verma", "email": "neha@company.com", "role": "employee"},
-    {"id": 5, "name": "Ishaan Patel", "email": "ishaan@company.com", "role": "employee"},
+    {"id": 1, "name": "Aarav Sharma", "email": "aarav@company.com", "role": "employee", "manager_id": 2},
+    {"id": 2, "name": "Riya Mehta", "email": "riya@company.com", "role": "manager", "manager_id": None},
+    {"id": 3, "name": "Karan Singh", "email": "karan@company.com", "role": "employee", "manager_id": 2},
+    {"id": 4, "name": "Neha Verma", "email": "neha@company.com", "role": "employee", "manager_id": 2},
+    {"id": 5, "name": "Ishaan Patel", "email": "ishaan@company.com", "role": "employee", "manager_id": 2},
 ]
 
 LEAVE_BALANCES = [
@@ -38,6 +38,7 @@ def _upsert_employee(db, payload):
         row.name = payload["name"]
         row.email = payload["email"]
         row.role = payload["role"]
+        row.manager_id = payload.get("manager_id")
 
 
 def _upsert_leave_balance(db, payload):
@@ -64,6 +65,7 @@ def _upsert_leave(db, payload):
 
 
 def seed_dummy_data():
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()

@@ -10,6 +10,7 @@ class Employee(Base):
     name = Column(String)
     email = Column(String)
     role = Column(String)
+    manager_id = Column(Integer, nullable=True)
 
 class Leave(Base):
     __tablename__ = "leaves"

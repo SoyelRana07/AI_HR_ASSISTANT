@@ -26,7 +26,7 @@ def get_leave_balance(employee_id: int):
         db.close()
 
 
-def get_team_leave_summary():
+def get_team_leave_summary(manager_id: int):
     db = SessionLocal()
 
     try:
@@ -38,6 +38,8 @@ def get_team_leave_summary():
                 func.coalesce(func.sum(LeaveBalance.remaining), 0),
                 func.coalesce(func.avg(LeaveBalance.remaining), 0),
             )
+            .join(Employee, Employee.id == LeaveBalance.employee_id)
+            .filter(Employee.manager_id == manager_id)
             .one()
         )
 
@@ -96,13 +98,14 @@ def get_employee_leave_details(employee_id: int):
         db.close()
 
 
-def get_low_leave_alerts(threshold: int = 3):
+def get_low_leave_alerts(manager_id: int, threshold: int = 3):
     db = SessionLocal()
 
     try:
         rows = (
             db.query(Employee, LeaveBalance)
             .join(LeaveBalance, LeaveBalance.employee_id == Employee.id)
+            .filter(Employee.manager_id == manager_id)
             .filter(LeaveBalance.remaining <= threshold)
             .order_by(LeaveBalance.remaining.asc(), LeaveBalance.used.desc())
             .all()
@@ -131,13 +134,14 @@ def get_low_leave_alerts(threshold: int = 3):
         db.close()
 
 
-def get_leave_leaderboard(limit: int = 5):
+def get_leave_leaderboard(manager_id: int, limit: int = 5):
     db = SessionLocal()
 
     try:
         rows = (
             db.query(Employee, LeaveBalance)
             .join(LeaveBalance, LeaveBalance.employee_id == Employee.id)
+            .filter(Employee.manager_id == manager_id)
             .order_by(LeaveBalance.used.desc(), LeaveBalance.remaining.asc())
             .limit(limit)
             .all()
@@ -166,11 +170,11 @@ def get_leave_leaderboard(limit: int = 5):
         db.close()
 
 
-def list_employees(limit: int = 20):
+def list_employees(manager_id: int, limit: int = 20):
     db = SessionLocal()
 
     try:
-        rows = db.query(Employee).order_by(Employee.id.asc()).limit(limit).all()
+        rows = db.query(Employee).filter(Employee.manager_id == manager_id).order_by(Employee.id.asc()).limit(limit).all()
         items = [
             {
                 "employee_id": row.id,
@@ -187,13 +191,14 @@ def list_employees(limit: int = 20):
         db.close()
 
 
-def search_employees(query: str, limit: int = 20):
+def search_employees(manager_id: int, query: str, limit: int = 20):
     db = SessionLocal()
 
     try:
         q = f"%{query}%"
         rows = (
             db.query(Employee)
+            .filter(Employee.manager_id == manager_id)
             .filter((Employee.name.ilike(q)) | (Employee.email.ilike(q)))
             .order_by(Employee.id.asc())
             .limit(limit)
@@ -216,12 +221,13 @@ def search_employees(query: str, limit: int = 20):
         db.close()
 
 
-def get_role_breakdown():
+def get_role_breakdown(manager_id: int):
     db = SessionLocal()
 
     try:
         rows = (
             db.query(Employee.role, func.count(Employee.id))
+            .filter(Employee.manager_id == manager_id)
             .group_by(Employee.role)
             .order_by(Employee.role.asc())
             .all()
@@ -236,7 +242,7 @@ def get_role_breakdown():
         db.close()
 
 
-def get_manager_leave_dashboard(alert_threshold: int = 3, leaderboard_limit: int = 5):
+def get_manager_leave_dashboard(manager_id: int, alert_threshold: int = 3, leaderboard_limit: int = 5):
     db = SessionLocal()
 
     try:
@@ -248,12 +254,15 @@ def get_manager_leave_dashboard(alert_threshold: int = 3, leaderboard_limit: int
                 func.coalesce(func.sum(LeaveBalance.remaining), 0),
                 func.coalesce(func.avg(LeaveBalance.remaining), 0),
             )
+            .join(Employee, Employee.id == LeaveBalance.employee_id)
+            .filter(Employee.manager_id == manager_id)
             .one()
         )
 
         alert_rows = (
             db.query(Employee, LeaveBalance)
             .join(LeaveBalance, LeaveBalance.employee_id == Employee.id)
+            .filter(Employee.manager_id == manager_id)
             .filter(LeaveBalance.remaining <= alert_threshold)
             .order_by(LeaveBalance.remaining.asc(), LeaveBalance.used.desc())
             .all()
@@ -271,6 +280,7 @@ def get_manager_leave_dashboard(alert_threshold: int = 3, leaderboard_limit: int
         leaderboard_rows = (
             db.query(Employee, LeaveBalance)
             .join(LeaveBalance, LeaveBalance.employee_id == Employee.id)
+            .filter(Employee.manager_id == manager_id)
             .order_by(LeaveBalance.used.desc(), LeaveBalance.remaining.asc())
             .limit(leaderboard_limit)
             .all()

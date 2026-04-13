@@ -41,7 +41,7 @@ def get_leave_balance_tool(args, context):
     required_role="manager",
 )
 def get_team_leave_summary_tool(args, context):
-    return get_team_leave_summary()
+    return get_team_leave_summary(context["employee_id"])
 
 
 @register_tool(
@@ -63,7 +63,7 @@ def get_employee_leave_details_tool(args, context):
     required_role="manager",
 )
 def get_low_leave_alerts_tool(args, context):
-    return get_low_leave_alerts(args.get("threshold", 3))
+    return get_low_leave_alerts(context["employee_id"], args.get("threshold", 3))
 
 
 @register_tool(
@@ -74,7 +74,7 @@ def get_low_leave_alerts_tool(args, context):
     required_role="manager",
 )
 def get_leave_leaderboard_tool(args, context):
-    return get_leave_leaderboard(args.get("limit", 5))
+    return get_leave_leaderboard(context["employee_id"], args.get("limit", 5))
 
 
 @register_tool(
@@ -85,7 +85,7 @@ def get_leave_leaderboard_tool(args, context):
     required_role="manager",
 )
 def list_employees_tool(args, context):
-    return list_employees(args.get("limit", 20))
+    return list_employees(context["employee_id"], args.get("limit", 20))
 
 
 @register_tool(
@@ -96,7 +96,7 @@ def list_employees_tool(args, context):
     required_role="manager",
 )
 def search_employees_tool(args, context):
-    return search_employees(args.get("query"), args.get("limit", 20))
+    return search_employees(context["employee_id"], args.get("query"), args.get("limit", 20))
 
 
 @register_tool(
@@ -107,7 +107,7 @@ def search_employees_tool(args, context):
     required_role="manager",
 )
 def get_role_breakdown_tool(args, context):
-    return get_role_breakdown()
+    return get_role_breakdown(context["employee_id"])
 
 
 @register_tool(
@@ -119,6 +119,7 @@ def get_role_breakdown_tool(args, context):
 )
 def get_manager_leave_dashboard_tool(args, context):
     return get_manager_leave_dashboard(
+        context["employee_id"],
         args.get("alert_threshold", 3),
         args.get("leaderboard_limit", 5),
     )
