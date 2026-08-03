@@ -25,6 +25,8 @@ if "current_user" not in st.session_state:
     st.session_state.current_user = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "pending_confirmation" not in st.session_state:
+    st.session_state.pending_confirmation = None
 
 
 def _auth_headers():
@@ -452,42 +454,76 @@ with right:
                         BACKEND_CHAT_URL,
                         json={"message": msg, "history": history_for_api},
                         headers=_auth_headers(),
-                        timeout=30,
+                        timeout=120,
                     )
                     res.raise_for_status()
                 
                 latency_ms = int((time.perf_counter() - start) * 1000)
                 payload = res.json()
-                response_body = payload.get("response", payload)
-                routing_debug = payload.get("routing_debug", {})
-
-                warning_text = None
-                if isinstance(response_body, dict) and response_body.get("code") == "FORBIDDEN_EMPLOYEE_SCOPE":
-                    details = response_body.get("details", {})
-                    warning_text = response_body.get("message", "Access denied.")
-                    if isinstance(details, dict) and "requested_employee_id" in details:
-                        warning_text += f" Requested: {details['requested_employee_id']}, Yours: {details['current_employee_id']}."
-
-                st.session_state.messages.append({"role": "assistant", "content": response_body, "routing_debug": routing_debug})
                 
-                with st.chat_message("assistant"):
-                    if warning_text:
-                        st.warning(warning_text)
-                    if isinstance(response_body, dict):
-                        st.json(response_body)
-                    else:
-                        st.markdown(response_body)
-                    
-                    st.caption(f"Round-trip: {latency_ms} ms")
-                    if routing_debug:
-                        with st.expander("Routing Debug", expanded=False):
-                            st.json(routing_debug)
+                if isinstance(payload, dict) and payload.get("status") == "requires_confirmation":
+                    st.session_state.pending_confirmation = {
+                        "tool_name": payload["tool_name"],
+                        "tool_args": payload["tool_args"],
+                        "thought": payload["thought"]
+                    }
+                    st.session_state.messages.append({
+                        "role": "assistant", 
+                        "content": f"AGENT THOUGHT: {payload['thought']}\n\nI need your permission to execute: **{payload['tool_name']}** with arguments: `{payload['tool_args']}`",
+                        "is_confirmation": True
+                    })
+                    st.rerun()
+                else:
+                    response_body = payload.get("response", payload)
+                    routing_debug = payload.get("routing_debug", {})
+
+                    warning_text = None
+                    if isinstance(response_body, dict) and response_body.get("code") == "FORBIDDEN_EMPLOYEE_SCOPE":
+                        details = response_body.get("details", {})
+                        warning_text = response_body.get("message", "Access denied.")
+                        if isinstance(details, dict) and "requested_employee_id" in details:
+                            warning_text += f" Requested: {details['requested_employee_id']}, Yours: {details['current_employee_id']}."
+
+                    st.session_state.messages.append({"role": "assistant", "content": response_body, "routing_debug": routing_debug})
+                    st.rerun()
 
             except requests.RequestException as exc:
                 st.error(f"Request failed: {exc}")
                 st.session_state.messages.pop()
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+# Handle confirmation buttons outside the main loop to avoid nesting issues
+if st.session_state.pending_confirmation:
+    pending = st.session_state.pending_confirmation
+    st.info(f"Pending Action: {pending['tool_name']}")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Confirm & Execute", key="confirm_btn", type="primary", use_container_width=True):
+            try:
+                res = requests.post(
+                    f"{BACKEND_BASE_URL}/execute_tool",
+                    json={
+                        "tool_name": pending["tool_name"],
+                        "tool_args": pending["tool_args"],
+                        "history": [] 
+                    },
+                    headers=_auth_headers(),
+                    timeout=60
+                )
+                res.raise_for_status()
+                result_payload = res.json()
+                st.session_state.messages.append({"role": "assistant", "content": result_payload["response"]})
+                st.session_state.pending_confirmation = None
+                st.rerun()
+            except Exception as e:
+                st.error(f"Execution failed: {e}")
+    with c2:
+        if st.button("Cancel", key="cancel_btn", use_container_width=True):
+            st.session_state.pending_confirmation = None
+            st.session_state.messages.append({"role": "assistant", "content": "Action cancelled by user."})
+            st.rerun()
 
 st.markdown("<div class='panel'>", unsafe_allow_html=True)
 st.subheader("MCP Admin")

@@ -91,6 +91,19 @@ def decode_access_token(token: str) -> Dict[str, str | int]:
     return payload
 
 
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
 def authenticate_user(employee_id: int, password: str) -> Optional[Employee]:
     db = SessionLocal()
     try:
@@ -98,11 +111,17 @@ def authenticate_user(employee_id: int, password: str) -> Optional[Employee]:
         if not user:
             return None
 
+        # Primary authentication: Check hashed password if set
+        if user.password_hash:
+            if verify_password(password, user.password_hash):
+                return user
+            return None
+
+        # Fallback for unhashed users / local dev backward compatibility
         shared_password = os.getenv("AUTH_SHARED_PASSWORD")
         if shared_password:
             valid_password = password == shared_password
         else:
-            # Development default: password is zero-padded employee id.
             valid_password = password == f"{employee_id:04d}"
 
         if not valid_password:

@@ -2,12 +2,14 @@ from backend.db import SessionLocal, engine
 from backend.models import Base, Employee, Leave, LeaveBalance
 
 
+from backend.auth import hash_password
+
 EMPLOYEES = [
-    {"id": 1, "name": "Aarav Sharma", "email": "aarav@company.com", "role": "employee", "manager_id": 2},
-    {"id": 2, "name": "Riya Mehta", "email": "riya@company.com", "role": "manager", "manager_id": None},
-    {"id": 3, "name": "Karan Singh", "email": "karan@company.com", "role": "employee", "manager_id": 2},
-    {"id": 4, "name": "Neha Verma", "email": "neha@company.com", "role": "employee", "manager_id": 2},
-    {"id": 5, "name": "Ishaan Patel", "email": "ishaan@company.com", "role": "employee", "manager_id": 2},
+    {"id": 1, "name": "Aarav Sharma", "email": "aarav@company.com", "role": "employee", "manager_id": 2, "password_hash": hash_password("0001")},
+    {"id": 2, "name": "Riya Mehta", "email": "riya@company.com", "role": "manager", "manager_id": None, "password_hash": hash_password("0002")},
+    {"id": 3, "name": "Karan Singh", "email": "karan@company.com", "role": "employee", "manager_id": 2, "password_hash": hash_password("0003")},
+    {"id": 4, "name": "Neha Verma", "email": "neha@company.com", "role": "employee", "manager_id": 2, "password_hash": hash_password("0004")},
+    {"id": 5, "name": "Ishaan Patel", "email": "ishaan@company.com", "role": "employee", "manager_id": 2, "password_hash": hash_password("0005")},
 ]
 
 LEAVE_BALANCES = [
@@ -39,6 +41,7 @@ def _upsert_employee(db, payload):
         row.email = payload["email"]
         row.role = payload["role"]
         row.manager_id = payload.get("manager_id")
+        row.password_hash = payload.get("password_hash")
 
 
 def _upsert_leave_balance(db, payload):

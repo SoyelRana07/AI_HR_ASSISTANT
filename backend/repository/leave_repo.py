@@ -1,5 +1,5 @@
 from backend.db import SessionLocal
-from backend.models import Employee, LeaveBalance
+from backend.models import Employee, LeaveBalance, LeaveRequest
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -312,5 +312,58 @@ def get_manager_leave_dashboard(manager_id: int, alert_threshold: int = 3, leade
         }
     except SQLAlchemyError:
         return {"error": "Database unavailable"}
+    finally:
+        db.close()
+
+
+def create_leave_request(employee_id: int, start_date, end_date, reason: str):
+    db = SessionLocal()
+    try:
+        new_request = LeaveRequest(
+            employee_id=employee_id,
+            start_date=start_date,
+            end_date=end_date,
+            status="pending",
+            reason=reason
+        )
+        db.add(new_request)
+        db.commit()
+        db.refresh(new_request)
+        return {
+            "message": "Leave request submitted successfully",
+            "request_id": new_request.id,
+            "status": new_request.status
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        return {"error": f"Failed to submit request: {str(e)}"}
+    finally:
+        db.close()
+
+
+def approve_leave_request(manager_id: int, request_id: int, approve: bool = True):
+    db = SessionLocal()
+    try:
+        # Verify if the request exists and if the manager has authority
+        request = db.query(LeaveRequest).filter(LeaveRequest.id == request_id).first()
+        if not request:
+            return {"error": "Request not found"}
+        
+        employee = db.query(Employee).filter(Employee.id == request.employee_id).first()
+        if not employee or employee.manager_id != manager_id:
+            return {"error": "Unauthorized: You are not the manager of this employee"}
+
+        new_status = "approved" if approve else "rejected"
+        request.status = new_status
+        
+        db.commit()
+        return {
+            "message": f"Leave request {new_status}",
+            "request_id": request_id,
+            "status": new_status
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        return {"error": f"Failed to update request: {str(e)}"}
     finally:
         db.close()

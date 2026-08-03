@@ -1,5 +1,5 @@
 # backend/models.py
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Date
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -11,6 +11,7 @@ class Employee(Base):
     email = Column(String)
     role = Column(String)
     manager_id = Column(Integer, nullable=True)
+    password_hash = Column(String, nullable=True)
 
 class Leave(Base):
     __tablename__ = "leaves"
@@ -27,3 +28,13 @@ class LeaveBalance(Base):
     total = Column(Integer)
     used = Column(Integer)
     remaining = Column(Integer)
+
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(Integer)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    status = Column(String)  # pending, approved, rejected
+    reason = Column(String)

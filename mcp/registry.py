@@ -6,6 +6,7 @@ def register_tool(
     parameters,
     input_model=None,
     required_role=None,
+    requires_confirmation=False,
 ):
     def decorator(func):
         TOOL_REGISTRY[name] = {
@@ -14,6 +15,7 @@ def register_tool(
             "parameters": parameters,
             "input_model": input_model,
             "required_role": required_role,
+            "requires_confirmation": requires_confirmation,
         }
         return func
     return decorator
@@ -29,6 +31,7 @@ def get_tools_metadata():
             "description": data["description"],
             "parameters": data["parameters"],
             "required_role": data.get("required_role"),
+            "requires_confirmation": data.get("requires_confirmation", False),
         }
 
         input_model = data.get("input_model")

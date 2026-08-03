@@ -41,3 +41,15 @@ class GetRoleBreakdownArgs(StrictBaseModel):
 class GetManagerLeaveDashboardArgs(StrictBaseModel):
     alert_threshold: int = Field(default=3, ge=0, le=30)
     leaderboard_limit: int = Field(default=5, ge=1, le=50)
+
+
+class SubmitLeaveRequestArgs(StrictBaseModel):
+    employee_id: int = Field(gt=0)
+    start_date: str = Field(description="ISO format date (YYYY-MM-DD)")
+    end_date: str = Field(description="ISO format date (YYYY-MM-DD)")
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ApproveLeaveRequestArgs(StrictBaseModel):
+    request_id: int = Field(gt=0)
+    approve: bool = Field(default=True)
