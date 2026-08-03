@@ -16,15 +16,14 @@ import mcp.tools.leave_tools
 
 load_project_env(__file__)
 
-limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+from backend.repository.chat_repo import save_chat_message, get_chat_history, clear_chat_history
 
 class Query(BaseModel):
     message: str
+    session_id: Optional[str] = "default"
     history: list[dict] = []
-
 
 class LoginRequest(BaseModel):
     employee_id: int
@@ -35,11 +34,25 @@ class ConfirmedQuery(BaseModel):
     tool_args: dict
     history: list[dict] = []
 
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/")
 def root():
     return {
         "message": "AI HR Assistant API is running",
-        "endpoints": ["/auth/login", "/me", "/chat", "/leave/{employee_id}", "/health/config", "/docs"]
+        "endpoints": ["/auth/login", "/me", "/chat", "/conversations/{session_id}", "/leave/{employee_id}", "/health/config", "/docs"]
     }
 
 
@@ -91,27 +104,59 @@ def me(current_user=Depends(get_current_user)):
 @app.post("/chat")
 @limiter.limit("20/minute")
 def chat(request: Request, q: Query, current_user=Depends(get_current_user)):
+    employee_id = int(current_user["employee_id"])
+    role = str(current_user["role"])
+    session_id = q.session_id or "default"
+
+    # Fetch persistent chat history if not provided in payload
+    history = q.history
+    if not history and session_id:
+        history = get_chat_history(session_id, employee_id)
+
+    # Save incoming user message
+    save_chat_message(session_id, employee_id, "user", q.message)
+
     routed = route_query(
         q.message,
-        int(current_user["employee_id"]),
-        str(current_user["role"]),
-        q.history,
+        employee_id,
+        role,
+        history,
         include_debug=True,
     )
+
+    final_response = routed
+    routing_debug = {}
 
     if isinstance(routed, dict):
         if routed.get("status") == "requires_confirmation":
             return routed
         if "data" in routed and "routing_debug" in routed:
-            return {
-                "response": routed["data"],
-                "routing_debug": routed["routing_debug"],
-            }
+            final_response = routed["data"]
+            routing_debug = routed["routing_debug"]
+
+    # Save assistant response to DB
+    response_text = str(final_response)
+    save_chat_message(session_id, employee_id, "assistant", response_text)
 
     return {
-        "response": routed,
-        "routing_debug": {},
+        "response": final_response,
+        "routing_debug": routing_debug,
+        "session_id": session_id,
     }
+
+
+@app.get("/conversations/{session_id}")
+def get_conversation(session_id: str, current_user=Depends(get_current_user)):
+    employee_id = int(current_user["employee_id"])
+    messages = get_chat_history(session_id, employee_id)
+    return {"session_id": session_id, "messages": messages}
+
+
+@app.delete("/conversations/{session_id}")
+def delete_conversation(session_id: str, current_user=Depends(get_current_user)):
+    employee_id = int(current_user["employee_id"])
+    count = clear_chat_history(session_id, employee_id)
+    return {"session_id": session_id, "deleted_count": count, "message": "Conversation history cleared."}
 
 
 @app.post("/execute_tool")

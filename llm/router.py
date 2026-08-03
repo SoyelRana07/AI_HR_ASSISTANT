@@ -57,21 +57,22 @@ def should_continue(state: AgentState):
 
 
 def _extract_employee_id_from_text(text: str):
-    patterns = [
-        r"employee\s*(?:id)?\s*[:#-]?\s*(\d+)",
-        r"id\s*[:#-]?\s*(\d+)",
-        r"\b(\d{1,6})\b",
-    ]
+    if not text:
+        return None
 
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            try:
-                value = int(match.group(1))
-                if value > 0:
-                    return value
-            except (TypeError, ValueError):
-                continue
+    # Strict pattern: ONLY match when 'employee', 'emp', 'user', or 'id:' is explicitly typed before digits
+    # Examples that match: "employee 2", "employee id 4", "emp #5", "id: 12", "user id: 3"
+    # Examples that DO NOT match: "2 august 2026", "2026-08-02", "3 days", "leave for 2"
+    strict_pattern = r"\b(?:employee\s*id|employee|emp|user|id)\s*[:=#-]?\s*(\d{1,6})\b"
+
+    match = re.search(strict_pattern, text, flags=re.IGNORECASE)
+    if match:
+        try:
+            value = int(match.group(1))
+            if value > 0:
+                return value
+        except (TypeError, ValueError):
+            return None
 
     return None
 
@@ -238,7 +239,19 @@ def _strip_none_values(payload):
 @traceable(name="AgentStepWithLLM", run_type="llm")
 def _agent_step_with_llm(user_input: str, tools, role: str, history: list, observations: list):
     tools_for_prompt = _tools_for_prompt(tools, role)
-    history_str = json.dumps(history, indent=2) if history else "[]"
+    
+    # Filter out internal error payloads / JSON blobs from conversational history
+    clean_history = []
+    if history:
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+            content = str(item.get("content", item.get("text", "")))
+            if "FORBIDDEN_EMPLOYEE_SCOPE" in content or "PROMPT_INJECTION_REJECTED" in content:
+                continue
+            clean_history.append({"role": item.get("role", "user"), "content": content})
+
+    history_str = json.dumps(clean_history, indent=2) if clean_history else "[]"
     observations_str = json.dumps(observations, indent=2) if observations else "[]"
 
     prompt = f"""
@@ -512,9 +525,11 @@ def route_query(user_input: str, employee_id: int, role: str, history: list = No
     tools = get_tools_metadata()
     print("LOADED TOOLS:", tools)
 
+    # Pre-check: If explicit text matches another employee ID
     requested_employee_id = _extract_employee_id_from_text(user_input)
     routing_debug["requested_employee_id"] = requested_employee_id
 
+    # Strictly block employee role if text explicitly requests another employee's ID (e.g. "employee 2" or "user 3")
     if role == "employee" and requested_employee_id and requested_employee_id != employee_id:
         result = {
             "error": "Access denied",
@@ -584,8 +599,9 @@ def route_query(user_input: str, employee_id: int, role: str, history: list = No
 
         args = _strip_none_values(args)
 
-        if "employee_id" in tool_parameters:
+        if "employee_id" in tool_parameters or role == "employee":
             if role == "employee":
+                # Security Guardrail: Non-manager employees are hard-locked to their authenticated ID
                 args["employee_id"] = employee_id
             else:
                 args["employee_id"] = requested_employee_id or args.get("employee_id", employee_id)

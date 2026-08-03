@@ -103,7 +103,7 @@ Terminal 3:
 
 ```powershell
 cd frontend
-streamlit run app.py
+npm run dev
 ```
 
 ## Demo Credentials
