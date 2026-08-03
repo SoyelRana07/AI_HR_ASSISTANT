@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, System
 import pydantic
 import json
 import uuid
+from langsmith import traceable
 
 def execute_tools(state: AgentState):
     last_message = state["messages"][-1]
@@ -234,6 +235,7 @@ def _strip_none_values(payload):
     return {key: value for key, value in payload.items() if value is not None}
 
 
+@traceable(name="AgentStepWithLLM", run_type="llm")
 def _agent_step_with_llm(user_input: str, tools, role: str, history: list, observations: list):
     tools_for_prompt = _tools_for_prompt(tools, role)
     history_str = json.dumps(history, indent=2) if history else "[]"
@@ -485,6 +487,7 @@ def _detect_prompt_injection(user_input: str) -> bool:
     return False
 
 
+@traceable(name="RouteQuery", run_type="chain")
 def route_query(user_input: str, employee_id: int, role: str, history: list = None, include_debug: bool = False):
     if history is None:
         history = []
