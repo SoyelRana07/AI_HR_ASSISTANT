@@ -28,17 +28,20 @@ def _get_secret() -> str:
 
 
 def _get_expiry_seconds() -> int:
-    raw = os.getenv("AUTH_TOKEN_EXPIRE_SECONDS", "3600")
+    raw = os.getenv("AUTH_TOKEN_EXPIRE_SECONDS", "86400")
     try:
         value = int(raw)
     except ValueError:
-        value = 3600
+        value = 86400
     return max(300, value)
 
 
-def create_access_token(claims: Dict[str, str | int]) -> str:
+def create_access_token(claims: Dict[str, str | int], expires_in: Optional[int] = None) -> str:
     payload = dict(claims)
-    payload["exp"] = int(time.time()) + _get_expiry_seconds()
+    if expires_in is not None:
+        payload["exp"] = int(time.time()) + expires_in
+    elif "exp" not in payload:
+        payload["exp"] = int(time.time()) + _get_expiry_seconds()
     payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     payload_b64 = _b64url_encode(payload_json)
 

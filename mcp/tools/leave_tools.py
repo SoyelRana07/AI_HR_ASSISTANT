@@ -10,6 +10,7 @@ from backend.repository.leave_repo import (
     get_team_leave_summary,
     create_leave_request,
     approve_leave_request,
+    get_pending_leave_requests,
 )
 from datetime import date
 from mcp.registry import register_tool
@@ -25,6 +26,7 @@ from mcp.tools.schemas import (
     GetTeamLeaveSummaryArgs,
     SubmitLeaveRequestArgs,
     ApproveLeaveRequestArgs,
+    GetPendingLeaveRequestsArgs,
 )
 
 @register_tool(
@@ -173,4 +175,18 @@ def approve_leave_request_tool(args, context):
         context["employee_id"],
         args["request_id"],
         args.get("approve", True)
+    )
+
+
+@register_tool(
+    name="get_pending_leave_requests",
+    description="Get all pending (or filtered) leave requests for team members under a manager.",
+    parameters={"status_filter": "string (default: 'pending')"},
+    input_model=GetPendingLeaveRequestsArgs,
+    required_role="manager",
+)
+def get_pending_leave_requests_tool(args, context):
+    return get_pending_leave_requests(
+        context["employee_id"],
+        args.get("status_filter", "pending")
     )

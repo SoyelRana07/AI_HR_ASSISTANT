@@ -139,7 +139,7 @@ def extract_json(text: str):
         "get_leave_balance", "get_employee_leave_details", "get_leave_leaderboard",
         "list_employees", "search_employees", "get_low_leave_alerts",
         "get_team_leave_summary", "get_role_breakdown", "get_manager_leave_dashboard",
-        "submit_leave_request", "approve_leave_request"
+        "submit_leave_request", "approve_leave_request", "get_pending_leave_requests"
     ]
     lower_text = text.lower()
     for tool in known_tools:
@@ -377,10 +377,10 @@ def _humanize_response(raw: str, user_input: str) -> str:
     except (json.JSONDecodeError, ValueError):
         return raw  # Can't parse, return as-is
     
-    return _format_data_as_text(data)
+    return _format_data_as_text(data, raw=raw)
 
 
-def _format_data_as_text(data) -> str:
+def _format_data_as_text(data, raw: str = "") -> str:
     """Recursively format HR data structures into human-readable text."""
     if isinstance(data, str):
         return data
@@ -433,6 +433,22 @@ def _format_data_as_text(data) -> str:
                 for i, emp in enumerate(data[lk], 1):
                     lines.append(_format_employee_item(i, emp))
 
+        # Pending Leave Requests
+        if "pending_requests" in data and isinstance(data["pending_requests"], list):
+            reqs = data["pending_requests"]
+            if not reqs:
+                return "🎉 No pending leave requests found for your team."
+            lines.append(f"**📋 Pending Leave Requests ({len(reqs)}):**\n")
+            for req in reqs:
+                emp_name = req.get('employee_name') or f"Employee {req.get('employee_id')}"
+                lines.append(
+                    f"• **Request #{req.get('request_id')}** — {emp_name} ({req.get('employee_email', '')})\n"
+                    f"  📅 Dates: **{req.get('start_date')}** to **{req.get('end_date')}**\n"
+                    f"  💬 Reason: {req.get('reason')}\n"
+                    f"  🏷️ Status: **{str(req.get('status', 'pending')).upper()}**\n"
+                )
+            return "\n".join(lines)
+
         # Alerts
         if "alerts" in data and isinstance(data["alerts"], list):
             lines.append("\n**⚠️ Low Leave Alerts:**")
@@ -456,7 +472,7 @@ def _format_data_as_text(data) -> str:
             if k not in known_keys and not isinstance(v, (dict, list)):
                 lines.append(f"  - {k.replace('_', ' ').capitalize()}: **{v}**")
 
-        return "\n".join(lines) if lines else raw
+        return "\n".join(lines) if lines else (raw or str(data))
 
     return str(data)
 

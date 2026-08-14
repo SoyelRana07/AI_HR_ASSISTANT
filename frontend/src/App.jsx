@@ -15,6 +15,17 @@ export default function App() {
   const [debugInfo, setDebugInfo] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
 
+  const [authError, setAuthError] = useState('');
+
+  const handleLogout = (reason = '') => {
+    setAuthData(null);
+    setMessages([]);
+    localStorage.removeItem('hr_auth');
+    if (reason) {
+      setAuthError(reason);
+    }
+  };
+
   useEffect(() => {
     if (authData) {
       localStorage.setItem('hr_auth', JSON.stringify(authData));
@@ -30,6 +41,10 @@ export default function App() {
       const res = await fetch(`http://localhost:8000/conversations/${sessId}`, {
         headers: { Authorization: `Bearer ${authData.access_token}` },
       });
+      if (res.status === 401) {
+        handleLogout('Session expired or invalid authentication token. Please sign in again.');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.messages) {
@@ -70,6 +85,16 @@ export default function App() {
         }),
       });
 
+      if (res.status === 401) {
+        handleLogout('Session expired or unauthorized. Please sign in again.');
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server error (${res.status})`);
+      }
+
       const data = await res.json();
       if (data.routing_debug) setDebugInfo(data.routing_debug);
 
@@ -82,7 +107,7 @@ export default function App() {
       } else {
         const botText = typeof data.response === 'string'
           ? data.response
-          : JSON.stringify(data.response, null, 2);
+          : (data.response ? JSON.stringify(data.response, null, 2) : 'No response received.');
         setMessages((prev) => [...prev, { sender: 'assistant', text: botText }]);
       }
     } catch (err) {
@@ -111,10 +136,20 @@ export default function App() {
         }),
       });
 
+      if (res.status === 401) {
+        handleLogout('Session expired or unauthorized. Please sign in again.');
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server error (${res.status})`);
+      }
+
       const data = await res.json();
       const botText = typeof data.response === 'string'
         ? data.response
-        : JSON.stringify(data.response, null, 2);
+        : (data.response ? JSON.stringify(data.response, null, 2) : 'No response received.');
 
       setMessages((prev) => [...prev, { sender: 'assistant', text: botText }]);
     } catch (err) {
@@ -140,13 +175,16 @@ export default function App() {
     setDebugInfo(null);
   };
 
-  const handleLogout = () => {
-    setAuthData(null);
-    setMessages([]);
-  };
-
   if (!authData) {
-    return <LoginPage onLoginSuccess={(data) => setAuthData(data)} />;
+    return (
+      <LoginPage
+        initialError={authError}
+        onLoginSuccess={(data) => {
+          setAuthError('');
+          setAuthData(data);
+        }}
+      />
+    );
   }
 
   const isManager = authData.user.role === 'manager';
@@ -186,6 +224,13 @@ export default function App() {
 
           {isManager && (
             <>
+              <button
+                className="demo-pill"
+                style={{ width: '100%', marginBottom: '0.5rem', textAlign: 'left' }}
+                onClick={() => handleSendMessage('show pending leave requests')}
+              >
+                📋 Pending Leave Requests
+              </button>
               <button
                 className="demo-pill"
                 style={{ width: '100%', marginBottom: '0.5rem', textAlign: 'left' }}

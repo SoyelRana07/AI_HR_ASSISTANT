@@ -367,3 +367,39 @@ def approve_leave_request(manager_id: int, request_id: int, approve: bool = True
         return {"error": f"Failed to update request: {str(e)}"}
     finally:
         db.close()
+
+
+def get_pending_leave_requests(manager_id: int, status_filter: str = "pending"):
+    db = SessionLocal()
+    try:
+        query = (
+            db.query(LeaveRequest, Employee)
+            .join(Employee, Employee.id == LeaveRequest.employee_id)
+            .filter(Employee.manager_id == manager_id)
+        )
+        if status_filter and status_filter.lower() != "all":
+            query = query.filter(LeaveRequest.status == status_filter.lower())
+
+        rows = query.order_by(LeaveRequest.id.desc()).all()
+        requests_list = [
+            {
+                "request_id": req.id,
+                "employee_id": emp.id,
+                "employee_name": emp.name,
+                "employee_email": emp.email,
+                "start_date": str(req.start_date),
+                "end_date": str(req.end_date),
+                "reason": req.reason,
+                "status": req.status,
+            }
+            for req, emp in rows
+        ]
+        return {
+            "status_filter": status_filter,
+            "count": len(requests_list),
+            "pending_requests": requests_list,
+        }
+    except SQLAlchemyError as e:
+        return {"error": f"Database unavailable: {str(e)}"}
+    finally:
+        db.close()

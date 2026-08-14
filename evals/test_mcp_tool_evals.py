@@ -31,3 +31,28 @@ def test_mcp_list_employees():
     assert "employees" in res
     assert len(res["employees"]) > 0
     assert "name" in res["employees"][0]
+
+
+def test_mcp_execute_tool_with_confirmed_flag():
+    """Verify execute_tool strips internal __confirmed__ metadata flag before validation."""
+    from mcp.runtime import execute_tool
+    context = {"employee_id": 1, "role": "employee"}
+    args = {
+        "employee_id": 1,
+        "start_date": "2026-08-15",
+        "end_date": "2026-08-20",
+        "reason": "sickness",
+        "__confirmed__": True
+    }
+    result = execute_tool("submit_leave_request", args, context)
+    assert isinstance(result, dict)
+    assert result.get("status") in {"submitted", "pending", "success", "approved"} or "request_id" in result or "message" in result
+
+
+def test_mcp_get_pending_leave_requests():
+    """Test getting pending leave requests via MCP tool as manager."""
+    from mcp.tools.leave_tools import get_pending_leave_requests_tool
+    context = {"employee_id": 2, "role": "manager"}
+    res = get_pending_leave_requests_tool({}, context)
+    assert isinstance(res, dict)
+    assert "pending_requests" in res

@@ -53,3 +53,7 @@ class SubmitLeaveRequestArgs(StrictBaseModel):
 class ApproveLeaveRequestArgs(StrictBaseModel):
     request_id: int = Field(gt=0)
     approve: bool = Field(default=True)
+
+
+class GetPendingLeaveRequestsArgs(StrictBaseModel):
+    status_filter: str = Field(default="pending", description="Filter status: 'pending', 'approved', 'rejected', or 'all'")

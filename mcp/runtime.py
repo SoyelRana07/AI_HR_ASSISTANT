@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from pydantic import ValidationError
 
-from mcp.registry import TOOL_REGISTRY
+from mcp.registry import TOOL_REGISTRY, _ensure_tools_loaded
 
 
 class ToolCallError(Exception):
@@ -24,6 +24,7 @@ class ToolCallError(Exception):
 
 
 def execute_tool(name: str, args: Dict[str, Any], context: Dict[str, Any]):
+    _ensure_tools_loaded()
     tool = TOOL_REGISTRY.get(name)
 
     if not tool:
@@ -39,11 +40,14 @@ def execute_tool(name: str, args: Dict[str, Any], context: Dict[str, Any]):
             {"required_role": required_role, "caller_role": caller_role},
         )
 
+    # Filter out internal metadata flags (e.g. __confirmed__) before validation
+    clean_args = {k: v for k, v in args.items() if not k.startswith("__")}
+
     input_model = tool.get("input_model")
     if input_model is not None:
         try:
-            validated_args = input_model.model_validate(args)
-            args = validated_args.model_dump()
+            validated_args = input_model.model_validate(clean_args)
+            clean_args = validated_args.model_dump()
         except ValidationError as exc:
             raise ToolCallError(
                 "INVALID_ARGUMENTS",
@@ -52,7 +56,7 @@ def execute_tool(name: str, args: Dict[str, Any], context: Dict[str, Any]):
             )
 
     try:
-        return tool["function"](args, context)
+        return tool["function"](clean_args, context)
     except ToolCallError:
         raise
     except Exception as exc:

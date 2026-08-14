@@ -22,7 +22,16 @@ def register_tool(
 
 
 
+def _ensure_tools_loaded():
+    if not TOOL_REGISTRY:
+        try:
+            import mcp.tools.leave_tools  # noqa: F401
+        except Exception:
+            pass
+
+
 def get_tools_metadata():
+    _ensure_tools_loaded()
     tools = []
 
     for name, data in TOOL_REGISTRY.items():

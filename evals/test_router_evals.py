@@ -29,3 +29,12 @@ def test_normalize_decision_legacy_tool():
     legacy = {"tool": "get_leave_balance", "args": {"employee_id": 1}}
     normalized = _normalize_decision(legacy)
     assert "action" in normalized or "final_answer" in normalized
+
+
+def test_humanize_response_raw_fallback():
+    """Verify _humanize_response does not crash with NameError when raw fallback is hit."""
+    from llm.router import _humanize_response
+    raw_json = '{"unknown_nested": {"foo": "bar"}}'
+    result = _humanize_response(raw_json, "test query")
+    assert result == raw_json or isinstance(result, str)
+

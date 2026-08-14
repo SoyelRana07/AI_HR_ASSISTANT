@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Bot, UserCheck, ShieldAlert } from 'lucide-react';
 
-export default function LoginPage({ onLoginSuccess }) {
+export default function LoginPage({ onLoginSuccess, initialError = '' }) {
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (idToUse, passToUse) => {
