@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: hr_assistant_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: soyelrana
+      POSTGRES_DB: hrdb
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hrdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: hr_assistant_mcp
+    command: python -m uvicorn mcp.server:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://postgres:soyelrana@db:5432/hrdb
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=soyelrana
+      - DB_NAME=hrdb
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: hr_assistant_backend
+    command: sh -c "python backend/seed_dummy_data.py && python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:soyelrana@db:5432/hrdb
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=soyelrana
+      - DB_NAME=hrdb
+      - MCP_MODE=remote
+      - MCP_SERVER_URL=http://mcp-server:8003
+      - OLLAMA_URL=http://host.docker.internal:11434/api/generate
+      - OLLAMA_MODEL=llama3
+      - OLLAMA_TIMEOUT_SECONDS=60
+    depends_on:
+      db:
+        condition: service_healthy
+      mcp-server:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hr_assistant_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

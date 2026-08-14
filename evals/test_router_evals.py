@@ -38,3 +38,24 @@ def test_humanize_response_raw_fallback():
     result = _humanize_response(raw_json, "test query")
     assert result == raw_json or isinstance(result, str)
 
+
+def test_try_fast_path_route_matching():
+    """Verify regex fast path intent matching for common queries."""
+    from llm.router import _try_fast_path_route
+
+    # Employee queries
+    res = _try_fast_path_route("show my leave balance", employee_id=1, role="employee")
+    assert res is not None
+    assert res[0] == "get_leave_balance"
+    assert res[1]["employee_id"] == 1
+
+    # Manager queries
+    res_mgr = _try_fast_path_route("pending leave requests", employee_id=1, role="manager")
+    assert res_mgr is not None
+    assert res_mgr[0] == "get_pending_leave_requests"
+
+    # Employee attempting manager query should get None (falling back to standard RBAC flow)
+    res_emp = _try_fast_path_route("pending leave requests", employee_id=1, role="employee")
+    assert res_emp is None
+
+

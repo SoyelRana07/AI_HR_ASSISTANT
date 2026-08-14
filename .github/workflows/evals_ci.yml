@@ -1,0 +1,36 @@
+name: Security & Evals CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-evals:
+    name: Run Security Evals & Router Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest Security & Router Evals
+        env:
+          DATABASE_URL: "sqlite:///./ci_test.db"
+          OLLAMA_URL: "http://localhost:11434/api/generate"
+          OLLAMA_MODEL: "llama3"
+          OLLAMA_TIMEOUT_SECONDS: "10"
+          MCP_MODE: "local"
+        run: |
+          pytest evals/ --verbose

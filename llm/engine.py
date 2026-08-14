@@ -18,7 +18,12 @@ def ask_llm(prompt: str):
             json={
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "options": {
+                    "num_predict": 256,
+                    "temperature": 0.0,
+                    "top_p": 0.9,
+                },
             },
             timeout=OLLAMA_TIMEOUT_SECONDS,
         )

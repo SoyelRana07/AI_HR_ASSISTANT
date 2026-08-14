@@ -13,6 +13,7 @@ import pydantic
 import json
 import uuid
 from langsmith import traceable
+from backend.repository.audit_repo import log_audit_event
 
 def execute_tools(state: AgentState):
     last_message = state["messages"][-1]
@@ -516,6 +517,60 @@ def _detect_prompt_injection(user_input: str) -> bool:
     return False
 
 
+def _try_fast_path_route(user_input: str, employee_id: int, role: str, requested_employee_id: int | None = None):
+    """Attempt instant regex-based intent routing to bypass LLM latency for common queries."""
+    if not user_input:
+        return None
+
+    text = user_input.strip().lower()
+
+    # Rule 1: Get Leave Balance
+    if re.search(r"\b(?:my|check\s+my|show\s+my)?\s*leave\s*balance\b", text) or \
+       re.search(r"\bhow\s+many\s+(?:leave|days)\s+(?:do\s+i\s+have|remaining|left)\b", text) or \
+       re.search(r"\bmy\s+remaining\s+leave\b", text):
+        target_id = employee_id if role == "employee" else (requested_employee_id or employee_id)
+        return "get_leave_balance", {"employee_id": target_id}
+
+    # Rule 2: Pending Leave Requests (Manager required)
+    if re.search(r"\b(?:show|get|list|view)?\s*pending\s*(?:leave\s*)?requests?\b", text) or \
+       re.search(r"\bleaves?\s*pending\s*approval\b", text):
+        if role == "manager":
+            return "get_pending_leave_requests", {}
+
+    # Rule 3: Team Leave Summary (Manager required)
+    if re.search(r"\bteam\s+leave\s+(?:summary|overview)\b", text) or \
+       re.search(r"\bsummary\s+of\s+team\s+leave\b", text):
+        if role == "manager":
+            return "get_team_leave_summary", {}
+
+    # Rule 4: Low Leave Alerts (Manager required)
+    if re.search(r"\blow\s+leave\s+(?:alerts?|employees?|warning)\b", text) or \
+       re.search(r"\bwho\s+has\s+low\s+leave\b", text):
+        if role == "manager":
+            return "get_low_leave_alerts", {"threshold": 3}
+
+    # Rule 5: Leave Leaderboard (Manager required)
+    if re.search(r"\bleave\s+leaderboard\b", text) or \
+       re.search(r"\bwho\s+used\s+the\s+most\s+leave\b", text) or \
+       re.search(r"\bleave\s+ranking\b", text):
+        if role == "manager":
+            return "get_leave_leaderboard", {"limit": 5}
+
+    # Rule 6: Role Breakdown (Manager required)
+    if re.search(r"\brole\s+breakdown\b", text) or \
+       re.search(r"\bemployees\s+by\s+role\b", text):
+        if role == "manager":
+            return "get_role_breakdown", {}
+
+    # Rule 7: List Employees (Manager required)
+    if re.search(r"\b(?:list|show|all)\s+employees\b", text) or \
+       re.search(r"\bemployee\s+directory\b", text):
+        if role == "manager":
+            return "list_employees", {"limit": 20}
+
+    return None
+
+
 @traceable(name="RouteQuery", run_type="chain")
 def route_query(user_input: str, employee_id: int, role: str, history: list = None, include_debug: bool = False):
     if history is None:
@@ -531,6 +586,13 @@ def route_query(user_input: str, employee_id: int, role: str, history: list = No
 
     # Prompt Injection Guardrail
     if _detect_prompt_injection(user_input):
+        log_audit_event(
+            event_type="PROMPT_INJECTION",
+            status="REJECTED",
+            employee_id=employee_id,
+            role=role,
+            details={"user_input": user_input},
+        )
         result = {
             "error": "Prompt injection detected",
             "code": "PROMPT_INJECTION_REJECTED",
@@ -547,6 +609,17 @@ def route_query(user_input: str, employee_id: int, role: str, history: list = No
 
     # Strictly block employee role if text explicitly requests another employee's ID (e.g. "employee 2" or "user 3")
     if role == "employee" and requested_employee_id and requested_employee_id != employee_id:
+        log_audit_event(
+            event_type="SECURITY_REJECTION",
+            status="FORBIDDEN_SCOPE",
+            employee_id=employee_id,
+            role=role,
+            details={
+                "requested_employee_id": requested_employee_id,
+                "current_employee_id": employee_id,
+                "user_input": user_input,
+            },
+        )
         result = {
             "error": "Access denied",
             "code": "FORBIDDEN_EMPLOYEE_SCOPE",
@@ -557,6 +630,25 @@ def route_query(user_input: str, employee_id: int, role: str, history: list = No
             "message": "Employees can only access their own leave information.",
         }
         return _with_optional_debug(result, routing_debug, include_debug)
+
+    # Fast-Path Intent Optimization (Bypass LLM latency for standard queries)
+    fast_match = _try_fast_path_route(user_input, employee_id, role, requested_employee_id)
+    if fast_match:
+        tool_name, tool_args = fast_match
+        routing_debug["steps"].append({
+            "iteration": 1,
+            "fast_path": True,
+            "action": tool_name,
+            "action_input": tool_args,
+            "thought": "Fast-path intent matched; bypassing LLM pass for maximum speed."
+        })
+        try:
+            raw_obs = call_tool(tool_name, tool_args, {"employee_id": employee_id, "role": role})
+            obs_str = json.dumps(raw_obs) if not isinstance(raw_obs, str) else raw_obs
+            final_text = _humanize_response(obs_str, user_input)
+            return _with_optional_debug(final_text, routing_debug, include_debug)
+        except Exception as exc:
+            print(f"Fast-path execution failed for {tool_name}: {exc}. Falling back to LLM router.")
 
     if not isinstance(tools, list) or not tools:
         result = {"message": "No tools are available for routing right now."}

@@ -81,8 +81,14 @@ Use backend/.env and set:
 
 ### 4. Seed database
 
+Standard dataset (5 employees):
 ```powershell
 python backend/seed_dummy_data.py
+```
+
+Enterprise dataset (500 employees, 300+ leave requests):
+```powershell
+python -m backend.seed_large_dataset
 ```
 
 ### 5. Start services
